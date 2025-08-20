@@ -11,6 +11,7 @@ using ThirdYearLP_IP_Solver.HelperClasses;
 using System.IO;
 
 
+
 namespace ThirdYearLP_IP_Solver
 {
     public partial class MainForm : Form
@@ -33,8 +34,8 @@ namespace ThirdYearLP_IP_Solver
         private void MainForm_Load(object sender, EventArgs e)
         {
 
-            string filePath = "C:\\Users\\Katryn\\source\\repos\\LPR381MainApp\\ThirdYearLP_IP_Solver\\Assets\\LPModel1.txt";
-
+            string relativePath = @"..\..\Assets\LPModel1.txt";
+            string filePath = Path.Combine(Application.StartupPath, relativePath);
             InputParser parser = new InputParser(filePath);
            
             richTextBox1.Text = parser.GetLPTableAsString();
