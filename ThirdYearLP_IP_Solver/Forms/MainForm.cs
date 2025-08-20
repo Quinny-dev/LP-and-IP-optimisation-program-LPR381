@@ -36,10 +36,40 @@ namespace ThirdYearLP_IP_Solver
 
             string relativePath = @"..\..\Assets\LPModel1.txt";
             string filePath = Path.Combine(Application.StartupPath, relativePath);
-            InputParser parser = new InputParser(filePath);
-           
-            richTextBox1.Text = parser.GetLPTableAsString();
+            try
+            {
+                InputParser parser = new InputParser(filePath);
 
+                // Option 1: Get formatted string representation
+                string lpTableString = parser.GetLPTableAsString();
+
+                // Display in a TextBox, RichTextBox, or console
+               
+                richTextBox1.Text = lpTableString;
+                // Option 2: Get structured data for calculations
+                LPProblem lpProblem = parser.GetLPProblemData();
+
+              
+                ProcessLPProblem(lpProblem);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error loading LP model: {ex.Message}", "Error",
+                               MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+
+        }
+
+        private void ProcessLPProblem(LPProblem problem)
+        {
+          
+            Console.WriteLine($"Objective Type: {problem.ObjectiveType}");
+            Console.WriteLine($"Number of variables: {problem.ObjectiveCoefficients.Length}");
+            Console.WriteLine($"Constraint type: {problem.ConstraintType}");
+            Console.WriteLine($"RHS value: {problem.RHS}");
+
+            
         }
     }
 }

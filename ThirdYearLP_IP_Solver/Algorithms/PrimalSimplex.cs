@@ -8,5 +8,6 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 {
     internal class PrimalSimplex
     {
+        public PrimalSimplex() { }
     }
 }
