@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+
+
 namespace ThirdYearLP_IP_Solver
 {
     public partial class MainForm : Form
@@ -15,6 +17,11 @@ namespace ThirdYearLP_IP_Solver
         public MainForm()
         {
             InitializeComponent();
+        }
+
+        private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            Application.Exit();
         }
     }
 }
