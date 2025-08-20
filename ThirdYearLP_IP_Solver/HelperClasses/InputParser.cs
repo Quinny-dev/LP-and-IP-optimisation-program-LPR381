@@ -31,9 +31,10 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                     throw new ArgumentException("Invalid file format. Expected at least 2 lines.");
                 }
 
-                // Parse the input (ignore third line with variable types)
+                // Parse the input 
+           
                 var objectiveInfo = ParseObjectiveLine(lines[0]);
-                var constraintInfo = ParseConstraintLine(lines[1]);
+                var constraintInfo = ParseConstraintLine(lines[1]);     //TODO: MAKE RELATIVE
 
                 // Build the LP table
                 return BuildLPTable(objectiveInfo, constraintInfo);
@@ -244,6 +245,7 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                                    .Where(l => !string.IsNullOrWhiteSpace(l))
                                    .ToArray();
 
+                //TO DO: MAKE CONSTRAINTS AMOUNT RELATIVE
                 var objectiveInfo = ParseObjectiveLine(lines[0]);
                 var constraintInfo = ParseConstraintLine(lines[1]);
 
@@ -267,6 +269,7 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
     // Helper class to hold LP problem data
     public class LPProblem
     {
+        //TO DO: MAKE CONSTRAINTS AMOUNT RELATIVE
         public string ObjectiveType { get; set; }
         public double[] ObjectiveCoefficients { get; set; }
         public double[] ConstraintCoefficients { get; set; }
