@@ -7,21 +7,38 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-
+using ThirdYearLP_IP_Solver.HelperClasses;
+using System.IO;
 
 
 namespace ThirdYearLP_IP_Solver
 {
     public partial class MainForm : Form
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
+
         public MainForm()
         {
             InitializeComponent();
+         
+
         }
 
         private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
         {
             Application.Exit();
+        }
+
+        private void MainForm_Load(object sender, EventArgs e)
+        {
+
+            string filePath = "C:\\Users\\Katryn\\source\\repos\\LPR381MainApp\\ThirdYearLP_IP_Solver\\Assets\\LPModel1.txt";
+
+            InputParser parser = new InputParser(filePath);
+           
+            richTextBox1.Text = parser.GetLPTableAsString();
+
         }
     }
 }
