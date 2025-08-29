@@ -9,8 +9,6 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
 {
     internal class InputParser
     {
-
-
         private string filePath;
 
         public InputParser(string path)
@@ -32,12 +30,22 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                 }
 
                 // Parse the input 
-           
                 var objectiveInfo = ParseObjectiveLine(lines[0]);
-                var constraintInfo = ParseConstraintLine(lines[1]);     //TODO: MAKE RELATIVE
+                var constraintInfoList = new List<(double[] coefficients, string inequality, double rhs)>();
+
+                // Parse all constraint lines (from line 1 onwards)
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    // Skip binary/integer indicator lines
+                    if (lines[i].Trim().ToLower().StartsWith("bin"))
+                        continue;
+
+                    var constraintInfo = ParseConstraintLine(lines[i]);
+                    constraintInfoList.Add(constraintInfo);
+                }
 
                 // Build the LP table
-                return BuildLPTable(objectiveInfo, constraintInfo);
+                return BuildLPTable(objectiveInfo, constraintInfoList);
             }
             catch (Exception e)
             {
@@ -100,23 +108,17 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                         }
                     }
                 }
-                else if (parts[i].StartsWith(">="))
+                else if(inequality == ">=")
                 {
-                    inequality = ">=";
-                    if (parts[i].Length > 2)
-                    {
-                        string rhsStr = parts[i].Substring(2);
-                        rhs = double.Parse(rhsStr);
-                    }
-                    else
-                    {
-                        i++;
-                        if (i < parts.Length)
-                        {
-                            rhs = double.Parse(parts[i]);
-                        }
-                    }
-                }
+                    // Flip coefficients and rhs for dual form
+                    for (int j = 0; j < coefficients.Count; j++)
+                        coefficients[j] = -coefficients[j];
+
+                    rhs = -rhs;
+
+                    // Mark as needing an "e" variable
+                    inequality = "dual"; // custom marker so we know to add +1 e-variable
+                }                
                 else if (parts[i] == "=")
                 {
                     inequality = "=";
@@ -131,16 +133,18 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
             return (coefficients.ToArray(), inequality, rhs);
         }
 
-        private string[] ParseVariableTypeLine(string line)
-        {
-            return line.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        }
-
         private string BuildLPTable(
             (string type, double[] coefficients) objective,
-            (double[] coefficients, string inequality, double rhs) constraint)
+            List<(double[] coefficients, string inequality, double rhs)> constraints)
         {
             StringBuilder table = new StringBuilder();
+
+            // Determine the maximum number of decision variables
+            int maxVariables = objective.coefficients.Length;
+            foreach (var constraint in constraints)
+            {
+                maxVariables = Math.Max(maxVariables, constraint.coefficients.Length);
+            }
 
             // Header
             table.AppendLine("=== LINEAR PROGRAMMING TABLE ===");
@@ -163,21 +167,33 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
 
             // Constraints
             table.AppendLine("Subject to:");
-            table.Append("  ");
-            for (int i = 0; i < constraint.coefficients.Length; i++)
+            for (int constraintIndex = 0; constraintIndex < constraints.Count; constraintIndex++)
             {
-                if (i > 0 && constraint.coefficients[i] >= 0)
-                    table.Append(" + ");
-                else if (constraint.coefficients[i] < 0)
-                    table.Append(" ");
+                var constraint = constraints[constraintIndex];
+                table.Append("  ");
 
-                table.Append($"{constraint.coefficients[i]}x{i + 1}");
+                for (int i = 0; i < constraint.coefficients.Length; i++)
+                {
+                    if (i > 0 && constraint.coefficients[i] >= 0)
+                        table.Append(" + ");
+                    else if (constraint.coefficients[i] < 0)
+                        table.Append(" ");
+
+                    table.Append($"{constraint.coefficients[i]}x{i + 1}");
+                }
+                table.AppendLine($" {constraint.inequality} {constraint.rhs}");
             }
-            table.AppendLine($" {constraint.inequality} {constraint.rhs}");
             table.AppendLine();
 
-            // Check if we need slack variables
-            bool hasSlackVariable = constraint.inequality == "<=";
+            // Count extra variables (slacks + dual e’s)
+            int slackCount = constraints.Count(c => c.inequality == "<=");
+            int eCount = constraints.Count(c => c.inequality == "dual");
+
+            // Table headers
+            for (int i = 0; i < slackCount; i++)
+                table.Append($"s{i + 1}\t");
+            for (int i = 0; i < eCount; i++)
+                table.Append($"e{i + 1}\t");
 
             // MAX Initial Simplex Table 
             if (objective.type.ToLower() == "max")
@@ -186,57 +202,101 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                 table.AppendLine("========================");
 
                 // Table headers
-                table.AppendLine("Basic Var\t");
-                table.Append("\t");
-                for (int i = 0; i < objective.coefficients.Length; i++)
+                table.Append("Basic Var\t");
+                for (int i = 0; i < maxVariables; i++)
                 {
                     table.Append($"x{i + 1}\t");
                 }
 
-                if (hasSlackVariable)
+                // Add slack variable headers
+                for (int i = 0; i < slackCount; i++)
                 {
-                    table.Append("s1\t");
+                    table.Append($"s{i + 1}\t");
                 }
 
-                table.Append("RHS");
-                table.AppendLine();
+                table.AppendLine("RHS");
 
-                // Constraint row
-                table.Append("s1\t");
-
-                for (int i = 0; i < constraint.coefficients.Length; i++)
+                // Constraint rows
+                int slackIndex = 0;
+                for (int constraintIndex = 0; constraintIndex < constraints.Count; constraintIndex++)
                 {
-                    table.Append($"{constraint.coefficients[i]}\t");
-                }
+                    var constraint = constraints[constraintIndex];
 
-                if (hasSlackVariable)
-                {
-                    table.Append($"1\t");
-                }
+                    // Basic variable name
+                    if (constraint.inequality == "<=")
+                    {
+                        table.Append($"s{slackIndex + 1}\t");
+                    }
+                    else
+                    {
+                        table.Append($"c{constraintIndex + 1}\t"); // For = or >= constraints
+                    }
 
-                table.Append($"{constraint.rhs}");
-                table.AppendLine();
+                    // Decision variable coefficients
+                    for (int i = 0; i < maxVariables; i++)
+                    {
+                        if (i < constraint.coefficients.Length)
+                        {
+                            table.Append($"{constraint.coefficients[i]}\t");
+                        }
+                        else
+                        {
+                            table.Append("0\t"); // Pad with zeros if constraint has fewer variables
+                        }
+                    }
+
+                    // Slack variable coefficients
+                    for (int i = 0; i < slackCount; i++)
+                    {
+                        if (constraint.inequality == "<=" && i == slackIndex)
+                        {
+                            table.Append("1\t");
+                        }
+                        else
+                        {
+                            table.Append("0\t");
+                        }
+                    }
+
+                    table.AppendLine($"{constraint.rhs}");
+
+
+                    if (constraint.inequality == "<=")
+                    {
+                        slackIndex++;
+                    }
+
+
+                }
 
                 // Objective row (Z row)
                 table.Append("Z\t");
-                for (int i = 0; i < objective.coefficients.Length; i++)
+
+                // Negative objective coefficients for decision variables
+                for (int i = 0; i < maxVariables; i++)
                 {
-                    table.Append($"{-objective.coefficients[i]}\t"); 
+                    if (i < objective.coefficients.Length)
+                    {
+                        table.Append($"{-objective.coefficients[i]}\t");
+                    }
+                    else
+                    {
+                        table.Append("0\t"); // Pad with zeros
+                    }
                 }
 
-                if (hasSlackVariable)
+                // Zeros for slack variables in objective row
+                for (int i = 0; i < slackCount; i++)
                 {
                     table.Append("0\t");
                 }
 
-                table.Append("0");
-                table.AppendLine();
+                table.AppendLine("0");
             }
 
             return table.ToString();
         }
 
-       
         public LPProblem GetLPProblemData()
         {
             try
@@ -245,18 +305,36 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
                                    .Where(l => !string.IsNullOrWhiteSpace(l))
                                    .ToArray();
 
-                //TO DO: MAKE CONSTRAINTS AMOUNT RELATIVE
+                if (lines.Length < 2)
+                {
+                    throw new ArgumentException("Invalid file format. Expected at least 2 lines.");
+                }
+
                 var objectiveInfo = ParseObjectiveLine(lines[0]);
-                var constraintInfo = ParseConstraintLine(lines[1]);
+                var constraintsList = new List<Constraint>();
+
+                // Parse all constraint lines
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    if (lines[i].Trim().ToLower().StartsWith("bin"))
+                        continue;
+
+                    var constraintInfo = ParseConstraintLine(lines[i]);
+                    constraintsList.Add(new Constraint
+                    {
+                        Coefficients = constraintInfo.coefficients,
+                        InequalityType = constraintInfo.inequality,
+                        RHS = constraintInfo.rhs
+                    });
+                }
 
                 return new LPProblem
                 {
                     ObjectiveType = objectiveInfo.type,
                     ObjectiveCoefficients = objectiveInfo.coefficients,
-                    ConstraintCoefficients = constraintInfo.coefficients,
-                    ConstraintType = constraintInfo.inequality,
-                    RHS = constraintInfo.rhs,
-                    HasSlackVariable = constraintInfo.inequality == "<="
+                    Constraints = constraintsList,
+                    VariableCount = objectiveInfo.coefficients.Length,
+                    ConstraintCount = constraintsList.Count
                 };
             }
             catch (Exception e)
@@ -266,15 +344,24 @@ namespace ThirdYearLP_IP_Solver.HelperClasses
         }
     }
 
-    // Helper class to hold LP problem data
+    // Helper classes to hold LP problem data
+    public class Constraint
+    {
+        public double[] Coefficients { get; set; }
+        public string InequalityType { get; set; } // "<=", ">=", or "="
+        public double RHS { get; set; }
+        public bool RequiresSlackVariable => InequalityType == "<=";
+    }
+
     public class LPProblem
     {
-        //TO DO: MAKE CONSTRAINTS AMOUNT RELATIVE
         public string ObjectiveType { get; set; }
         public double[] ObjectiveCoefficients { get; set; }
-        public double[] ConstraintCoefficients { get; set; }
-        public string ConstraintType { get; set; }
-        public double RHS { get; set; }
-        public bool HasSlackVariable { get; set; }
+        public List<Constraint> Constraints { get; set; }
+        public int VariableCount { get; set; }
+        public int ConstraintCount { get; set; }
+
+        public int SlackVariableCount => Constraints.Count(c => c.RequiresSlackVariable);
+        public bool HasSlackVariables => SlackVariableCount > 0;
     }
 }

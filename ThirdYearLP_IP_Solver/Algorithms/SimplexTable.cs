@@ -8,11 +8,11 @@ using ThirdYearLP_IP_Solver.HelperClasses;
 
 namespace ThirdYearLP_IP_Solver.Algorithms
 {
-    
+
     public class SimplexTable
     {
         public string[] BasicVariables { get; set; }
-        public string[] AllVariables { get; set; }  // x1, x2, s1, s2, ect
+        public string[] AllVariables { get; set; }  // x1, x2, s1, s2, etc
         public double[,] TableData { get; set; }    // The actual table values
         public double[] RHS { get; set; }           // Right-hand side values
         public double[] ObjectiveRow { get; set; }  // Z row 
@@ -32,51 +32,99 @@ namespace ThirdYearLP_IP_Solver.Algorithms
             OptimalityStatus = "Not Optimal";
         }
 
-        // Create initial table 
+        // Create initial table from updated LPProblem
         public static SimplexTable CreateFromLPProblem(LPProblem problem)
         {
-            int numVars = problem.ObjectiveCoefficients.Length;
-            int numSlackVars = problem.HasSlackVariable ? 1 : 0;
-            int totalVars = numVars + numSlackVars;
+            int numDecisionVars = problem.VariableCount;
+            int numConstraints = problem.ConstraintCount;
+            int numSlackVars = problem.SlackVariableCount;
+            int totalVars = numDecisionVars + numSlackVars;
 
-            SimplexTable table = new SimplexTable(1, totalVars);
+            SimplexTable table = new SimplexTable(numConstraints, totalVars);
 
             // Set up variable names
-            for (int i = 0; i < numVars; i++)
+            for (int i = 0; i < numDecisionVars; i++)
             {
                 table.AllVariables[i] = $"x{i + 1}";
             }
 
-            if (problem.HasSlackVariable)
+            // Add slack variable names
+            int slackIndex = 0;
+            for (int i = 0; i < numSlackVars; i++)
             {
-                table.AllVariables[numVars] = "s1";
-                table.BasicVariables[0] = "s1";
+                table.AllVariables[numDecisionVars + i] = $"s{i + 1}";
             }
 
-            // Set up constraint row
-            for (int i = 0; i < numVars; i++)
+            // Set up constraint rows
+            slackIndex = 0;
+            for (int constraintIdx = 0; constraintIdx < numConstraints; constraintIdx++)
             {
-                table.TableData[0, i] = problem.ConstraintCoefficients[i];
+                var constraint = problem.Constraints[constraintIdx];
+
+                // Set basic variable name
+                if (constraint.RequiresSlackVariable)
+                {
+                    table.BasicVariables[constraintIdx] = $"s{slackIndex + 1}";
+                }
+                else
+                {
+                    table.BasicVariables[constraintIdx] = $"a{constraintIdx + 1}"; // Artificial variable for = or >=
+                }
+
+                // Set decision variable coefficients
+                for (int j = 0; j < numDecisionVars; j++)
+                {
+                    if (j < constraint.Coefficients.Length)
+                    {
+                        table.TableData[constraintIdx, j] = constraint.Coefficients[j];
+                    }
+                    else
+                    {
+                        table.TableData[constraintIdx, j] = 0; // Pad with zeros if needed
+                    }
+                }
+
+                // Set slack variable coefficients
+                for (int j = 0; j < numSlackVars; j++)
+                {
+                    if (constraint.RequiresSlackVariable && j == slackIndex)
+                    {
+                        table.TableData[constraintIdx, numDecisionVars + j] = 1;
+                    }
+                    else
+                    {
+                        table.TableData[constraintIdx, numDecisionVars + j] = 0;
+                    }
+                }
+
+                // Set RHS
+                table.RHS[constraintIdx] = constraint.RHS;
+
+                if (constraint.RequiresSlackVariable)
+                {
+                    slackIndex++;
+                }
             }
 
-            if (problem.HasSlackVariable)
+            // Set up objective row for maximization
+            for (int j = 0; j < numDecisionVars; j++)
             {
-                table.TableData[0, numVars] = 1; 
+                if (j < problem.ObjectiveCoefficients.Length)
+                {
+                    table.ObjectiveRow[j] = problem.ObjectiveType.ToLower() == "max"
+                        ? -problem.ObjectiveCoefficients[j]
+                        : problem.ObjectiveCoefficients[j];
+                }
+                else
+                {
+                    table.ObjectiveRow[j] = 0;
+                }
             }
 
-            table.RHS[0] = problem.RHS;
-
-            // Set up objective row 
-            for (int i = 0; i < numVars; i++)
+            // Slack variables have 0 coefficient in objective
+            for (int j = numDecisionVars; j < totalVars; j++)
             {
-                table.ObjectiveRow[i] = problem.ObjectiveType.ToLower() == "max"
-                    ? -problem.ObjectiveCoefficients[i]
-                    : problem.ObjectiveCoefficients[i];
-            }
-
-            if (problem.HasSlackVariable)
-            {
-                table.ObjectiveRow[numVars] = 0; // Slack vars in objective
+                table.ObjectiveRow[j] = 0;
             }
 
             return table;
@@ -103,10 +151,10 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
                 for (int j = 0; j < AllVariables.Length; j++)
                 {
-                    row[AllVariables[j]] = TableData[i, j];
+                    row[AllVariables[j]] = Math.Round(TableData[i, j], 4); // Round for display
                 }
 
-                row["RHS"] = RHS[i];
+                row["RHS"] = Math.Round(RHS[i], 4);
                 dt.Rows.Add(row);
             }
 
@@ -116,21 +164,53 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
             for (int j = 0; j < AllVariables.Length; j++)
             {
-                objRow[AllVariables[j]] = ObjectiveRow[j];
+                objRow[AllVariables[j]] = Math.Round(ObjectiveRow[j], 4);
             }
 
-            objRow["RHS"] = 0; 
+            objRow["RHS"] = 0;
             dt.Rows.Add(objRow);
 
             return dt;
         }
+
+        // Get current solution values
+        public Dictionary<string, double> GetSolutionValues()
+        {
+            var solution = new Dictionary<string, double>();
+
+            // Initialize all variables to 0
+            foreach (string var in AllVariables)
+            {
+                solution[var] = 0;
+            }
+
+            // Set basic variables to their RHS values
+            for (int i = 0; i < BasicVariables.Length; i++)
+            {
+                solution[BasicVariables[i]] = RHS[i];
+            }
+
+            return solution;
+        }
+
+        // Get objective function value
+        public double GetObjectiveValue()
+        {
+            var solution = GetSolutionValues();
+            double objValue = 0;
+
+            // This would need the original objective coefficients to calculate properly
+            // For now, we can estimate from the current table state
+            return objValue;
+        }
     }
-    //TODO: FIX CALCULATIONS 
+
     // Class to handle simplex algorithm calculations
     public class SimplexSolver
     {
         public List<SimplexTable> Iterations { get; private set; }
         public SimplexTable CurrentTable { get; private set; }
+        public LPProblem Problem { get; private set; }
 
         public SimplexSolver()
         {
@@ -139,6 +219,7 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
         public void Initialize(LPProblem problem)
         {
+            Problem = problem;
             CurrentTable = SimplexTable.CreateFromLPProblem(problem);
             CurrentTable.Iteration = 0;
             Iterations.Add(CurrentTable);
@@ -146,26 +227,51 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
         public bool IsOptimal()
         {
-            // Check if all objective row values are >= 0 (for max problem)
-            return CurrentTable.ObjectiveRow.All(x => x >= 0);
+            // For maximization: optimal when all objective row values >= 0
+            // For minimization: optimal when all objective row values <= 0
+            if (Problem.ObjectiveType.ToLower() == "max")
+            {
+                return CurrentTable.ObjectiveRow.All(x => x >= -1e-10); // Small tolerance for floating point
+            }
+            else
+            {
+                return CurrentTable.ObjectiveRow.All(x => x <= 1e-10);
+            }
         }
 
         public (int pivotRow, int pivotCol) FindPivotElement()
         {
-            // Find entering variable (most negative in objective row for max problem)
             int pivotCol = -1;
-            double mostNegative = 0;
 
-            for (int j = 0; j < CurrentTable.ObjectiveRow.Length; j++)
+            // Find entering variable
+            if (Problem.ObjectiveType.ToLower() == "max")
             {
-                if (CurrentTable.ObjectiveRow[j] < mostNegative)
+                // Most negative value in objective row
+                double mostNegative = -1e-10; // Use small tolerance
+                for (int j = 0; j < CurrentTable.ObjectiveRow.Length; j++)
                 {
-                    mostNegative = CurrentTable.ObjectiveRow[j];
-                    pivotCol = j;
+                    if (CurrentTable.ObjectiveRow[j] < mostNegative)
+                    {
+                        mostNegative = CurrentTable.ObjectiveRow[j];
+                        pivotCol = j;
+                    }
+                }
+            }
+            else
+            {
+                // Most positive value in objective row for minimization
+                double mostPositive = 1e-10;
+                for (int j = 0; j < CurrentTable.ObjectiveRow.Length; j++)
+                {
+                    if (CurrentTable.ObjectiveRow[j] > mostPositive)
+                    {
+                        mostPositive = CurrentTable.ObjectiveRow[j];
+                        pivotCol = j;
+                    }
                 }
             }
 
-            if (pivotCol == -1) return (-1, -1); 
+            if (pivotCol == -1) return (-1, -1); // Already optimal
 
             // Find leaving variable using minimum ratio test
             int pivotRow = -1;
@@ -173,15 +279,21 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
             for (int i = 0; i < CurrentTable.RHS.Length; i++)
             {
-                if (CurrentTable.TableData[i, pivotCol] > 0)
+                if (CurrentTable.TableData[i, pivotCol] > 1e-10) // Use tolerance
                 {
                     double ratio = CurrentTable.RHS[i] / CurrentTable.TableData[i, pivotCol];
-                    if (ratio < minRatio)
+                    if (ratio >= 0 && ratio < minRatio)
                     {
                         minRatio = ratio;
                         pivotRow = i;
                     }
                 }
+            }
+
+            if (pivotRow == -1)
+            {
+                // Unbounded solution
+                return (-1, -1);
             }
 
             return (pivotRow, pivotCol);
@@ -216,7 +328,7 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
         private SimplexTable PerformPivotOperation(int pivotRow, int pivotCol)
         {
-            // Create a copy of current table
+            // Create a copy of current table structure
             int numConstraints = CurrentTable.BasicVariables.Length;
             int numVars = CurrentTable.AllVariables.Length;
 
@@ -224,19 +336,25 @@ namespace ThirdYearLP_IP_Solver.Algorithms
             Array.Copy(CurrentTable.BasicVariables, newTable.BasicVariables, numConstraints);
             Array.Copy(CurrentTable.AllVariables, newTable.AllVariables, numVars);
 
-            // Update basic variable
+            // Update basic variable (entering variable replaces leaving variable)
             newTable.BasicVariables[pivotRow] = CurrentTable.AllVariables[pivotCol];
 
             double pivotElement = CurrentTable.TableData[pivotRow, pivotCol];
 
-            // Update pivot row
+            // Check for zero pivot (shouldn't happen with proper pivot selection)
+            if (Math.Abs(pivotElement) < 1e-10)
+            {
+                throw new InvalidOperationException("Pivot element is too close to zero");
+            }
+
+            // Update pivot row (divide by pivot element)
             for (int j = 0; j < numVars; j++)
             {
                 newTable.TableData[pivotRow, j] = CurrentTable.TableData[pivotRow, j] / pivotElement;
             }
             newTable.RHS[pivotRow] = CurrentTable.RHS[pivotRow] / pivotElement;
 
-            // Update other constraint rows
+            // Update other constraint rows using row operations
             for (int i = 0; i < numConstraints; i++)
             {
                 if (i != pivotRow)
@@ -264,11 +382,51 @@ namespace ThirdYearLP_IP_Solver.Algorithms
 
         public void SolveToOptimal()
         {
-            while (PerformIteration())
+            int maxIterations = 1000; // Prevent infinite loops
+            int iterations = 0;
+
+            while (PerformIteration() && iterations < maxIterations)
             {
-                // Continues until optimal or unbounded
+                iterations++;
             }
+
+            if (iterations >= maxIterations)
+            {
+                CurrentTable.OptimalityStatus = "Maximum iterations reached - possible cycling";
+            }
+        }
+
+        // Get final solution in readable format
+        public string GetSolutionSummary()
+        {
+            if (!CurrentTable.IsOptimal)
+            {
+                return $"Solution Status: {CurrentTable.OptimalityStatus}";
+            }
+
+            StringBuilder summary = new StringBuilder();
+            summary.AppendLine("=== OPTIMAL SOLUTION FOUND ===");
+            summary.AppendLine($"Iterations: {CurrentTable.Iteration}");
+            summary.AppendLine();
+
+            var solution = CurrentTable.GetSolutionValues();
+
+            // Show decision variables
+            summary.AppendLine("Decision Variables:");
+            for (int i = 0; i < Problem.VariableCount; i++)
+            {
+                string varName = $"x{i + 1}";
+                summary.AppendLine($"  {varName} = {Math.Round(solution[varName], 4)}");
+            }
+
+            summary.AppendLine();
+            summary.AppendLine("Basic Variables:");
+            for (int i = 0; i < CurrentTable.BasicVariables.Length; i++)
+            {
+                summary.AppendLine($"  {CurrentTable.BasicVariables[i]} = {Math.Round(CurrentTable.RHS[i], 4)}");
+            }
+
+            return summary.ToString();
         }
     }
 }
-

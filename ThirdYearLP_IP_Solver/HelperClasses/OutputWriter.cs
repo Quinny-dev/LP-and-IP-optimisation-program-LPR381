@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ThirdYearLP_IP_Solver.HelperClasses
 {
-    internal class OutputWriter
+    public class OutputWriter
     {
     }
 }
