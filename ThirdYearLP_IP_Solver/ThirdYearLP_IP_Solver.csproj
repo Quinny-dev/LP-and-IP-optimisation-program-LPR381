@@ -8,12 +8,13 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>ThirdYearLP_IP_Solver</RootNamespace>
     <AssemblyName>ThirdYearLP_IP_Solver</AssemblyName>
-    <TargetFrameworkVersion>v4.8.1</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -62,6 +63,7 @@
     <Compile Include="Algorithms\CuttingPlane.cs" />
     <Compile Include="Algorithms\DualSimplex.cs" />
     <Compile Include="Algorithms\PrimalSimplex.cs" />
+    <Compile Include="Algorithms\RevisedSimplex.cs" />
     <Compile Include="Algorithms\SimplexTable.cs" />
     <Compile Include="Assets\Slay.cs" />
     <Compile Include="Forms\SplashScreen.cs">
@@ -106,6 +108,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
