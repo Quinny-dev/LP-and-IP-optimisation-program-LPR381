@@ -1,0 +1,12 @@
+<<<<<<< Updated upstream
+# Visual Studio cache and user files
+.vs/
+bin/
+obj/
+*.user
+*.suo
+=======
+# Visual Studio temporary files
+.vs/
+*.sqlite
+>>>>>>> Stashed changes
