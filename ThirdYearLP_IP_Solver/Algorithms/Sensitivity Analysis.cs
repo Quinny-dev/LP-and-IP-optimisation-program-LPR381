@@ -6,6 +6,14 @@ using System.Threading.Tasks;
 
 namespace ThirdYearLP_IP_Solver.Algorithms
 {
+    public enum VariableSignType
+    {
+        Positive,
+        Negative,
+        Binary,
+        Integer,
+        Unrestricted
+    }
     internal class Sensitivity_Analysis
     {
             private bool isConsoleOutput;
@@ -23,7 +31,7 @@ namespace ThirdYearLP_IP_Solver.Algorithms
             private List<List<double>> revisedTab;
             private List<string> headerStr;
 
-            public SensitivityAnalysis(bool isConsoleOutput = false)
+            public Sensitivity_Analysis(bool isConsoleOutput = false)
             {
                 this.isConsoleOutput = isConsoleOutput;
                 dual = new DualSimplex();
@@ -1441,9 +1449,9 @@ namespace ThirdYearLP_IP_Solver.Algorithms
             }
 
             public (List<double> objFunc, List<List<double>> constraints) SetUpProblem(
-        List<double> objFunc,
-        List<List<double>> constraints,
-        List<VariableSignType> varSigns = null
+            List<double> objFunc,
+            List<List<double>> constraints,
+            List<VariableSignType> varSigns = null
     )
             {
                 int numConstraints = objFunc.Count;      // e.g. 6
@@ -1484,7 +1492,7 @@ namespace ThirdYearLP_IP_Solver.Algorithms
                 _constraints = constraints;
                 _isMin = isMin;
             }
-        }
+        
     }
 }
 
